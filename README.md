@@ -80,3 +80,7 @@ Customize the video with these flags:
 I don't know what they do, and i specifically choose to have it be this way. I needed to create a test mass of videos, and i know that knowing how to tune the video's abstractionesses would make me spend time optimizing it, so i asked an AI to make so that the parameters exert control over everything in a chaotic way, and relate eachother to themselves, this way preventing a learning curve between numbers and the unique abstract result.
 
 Only the `threshold` that i recommend to do not exceed 3000.
+
+-----
+
+Thanks Claude, Manus, and my past self
