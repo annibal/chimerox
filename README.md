@@ -83,4 +83,4 @@ Only the `threshold` that i recommend to do not exceed 3000.
 
 -----
 
-Thanks Claude, Manus, and my past self
+Thanks to Claude, Manus, and my past self
