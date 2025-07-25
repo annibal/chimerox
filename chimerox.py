@@ -13,7 +13,7 @@ import colorsys
 from pathlib import Path
 
 class Chimerox:
-    def __init__(self, iota, omicron, phase, threshold, resonance, entropy, width, height, duration, fps=24):
+    def __init__(self, iota, omicron, phase, threshold, resonance, entropy, width, height, duration, fps=24, distort_reality=False):
         self.iota = iota
         self.omicron = omicron
         self.phase = phase
@@ -38,6 +38,9 @@ class Chimerox:
         self.base_hue = (iota % 360) / 360.0
         self.hue_shift = (omicron % 100) / 100.0
         
+        # Generate color palette at initialization
+        self.color_palette = self._generate_color_palette()
+        
         # Bokeh system (more integrated)
         self.bokeh_particles = self._init_bokeh()
         self.bokeh_movement_speed = 0.8 + entropy * 0.5
@@ -54,11 +57,12 @@ class Chimerox:
         self.vortex_intensity = entropy * resonance * 1.5
         self.vortex_rotation_speed = 0.03 + abs(phase) * 0.05
         
-        # Reality Distortion Field (5th element)
-        self.distortion_strength = entropy * resonance * 0.3
+        # Reality Distortion Field (5th element) - OPTIONAL
+        self.reality_distortion_enabled = distort_reality
+        self.distortion_strength = entropy * resonance * 0.3 if distort_reality else 0
         self.distortion_type = omicron % 4  # 0=spiral, 1=circular, 2=radial, 3=wave
         self.distortion_speed = 0.02 + abs(phase) * 0.03
-        self.distortion_centers = self._init_distortion_centers()
+        self.distortion_centers = self._init_distortion_centers() if distort_reality else []
         
     def _init_particles(self):
         particles = []
@@ -90,14 +94,13 @@ class Chimerox:
         for i in range(bokeh_count):
             # Palette range based on omicron (wider range)
             palette_range = (self.omicron % 300) / 300.0  # 0-300 degrees
-            hue_variation = (random.random() - 0.5) * palette_range
-            hue = (self.base_hue + hue_variation) % 1.0
+            palette_index = int(i * len(self.color_palette) / bokeh_count)
             
             bokeh = {
                 'x': random.uniform(-100, self.width + 100),
                 'y': random.uniform(-100, self.height + 100),
                 'size': random.uniform(40, 180),
-                'hue': hue,
+                'palette_index': palette_index,
                 'flicker_offset': random.uniform(0, math.pi * 2),
                 'movement_angle': random.uniform(0, math.pi * 2),
                 'depth': random.uniform(0.4, 1.2)  # for layering
@@ -123,6 +126,74 @@ class Chimerox:
         
         return centers
     
+    def _generate_color_palette(self):
+        """Generate a cohesive color palette based on seeds"""
+        random.seed(self.iota)
+        
+        # Number of base colors (3-6 colors)
+        num_colors = 3 + (self.omicron % 4)
+        
+        # Choose palette type based on iota
+        palette_type = self.iota % 4
+        
+        palette = []
+        
+        if palette_type == 0:  # Analogous (neighboring hues)
+            base_hue = self.base_hue
+            spread = 0.15  # 54 degrees
+            for i in range(num_colors):
+                hue = (base_hue + (i - num_colors//2) * spread / num_colors) % 1.0
+                palette.append(hue)
+                
+        elif palette_type == 1:  # Complementary
+            base_hue = self.base_hue
+            palette.append(base_hue)
+            palette.append((base_hue + 0.5) % 1.0)  # Opposite
+            # Add variations
+            for i in range(num_colors - 2):
+                variation = (base_hue + 0.1 + i * 0.15) % 1.0
+                palette.append(variation)
+                
+        elif palette_type == 2:  # Triadic (120° apart)
+            base_hue = self.base_hue
+            for i in range(min(3, num_colors)):
+                hue = (base_hue + i * 0.333) % 1.0
+                palette.append(hue)
+            # Fill remaining with variations
+            for i in range(num_colors - 3):
+                variation = (base_hue + 0.05 + i * 0.1) % 1.0
+                palette.append(variation)
+                
+        else:  # Split-complementary
+            base_hue = self.base_hue
+            palette.append(base_hue)
+            palette.append((base_hue + 0.416) % 1.0)  # 150°
+            palette.append((base_hue + 0.583) % 1.0)  # 210°
+            # Add variations
+            for i in range(num_colors - 3):
+                variation = (base_hue + 0.08 + i * 0.12) % 1.0
+                palette.append(variation)
+        
+        # Convert to RGB and store with variations
+        rgb_palette = []
+        for hue in palette:
+            # Multiple saturation/value variations for each hue
+            for sat in [0.6, 0.8, 1.0]:
+                for val in [0.7, 0.9]:
+                    rgb = colorsys.hsv_to_rgb(hue, sat, val)
+                    rgb_palette.append(tuple(int(c * 255) for c in rgb))
+        
+        return rgb_palette
+    
+    def _get_palette_color(self, index, brightness=1.0, time_offset=0):
+        """Get color from palette with variations"""
+        # Cycle through palette colors
+        color_idx = (index + int(time_offset * 10)) % len(self.color_palette)
+        base_color = self.color_palette[color_idx]
+        
+        # Apply brightness modifier
+        return tuple(int(c * brightness) for c in base_color)
+    
     def _init_distortion_centers(self):
         """Initialize distortion centers for reality warping"""
         if self.distortion_strength < 0.1:
@@ -145,17 +216,12 @@ class Chimerox:
         return centers
     
     def _get_color(self, t, particle):
-        # Complex color calculation using all parameters
-        base_t = (t + self.phase) * self.resonance
-        hue_mod = (self.base_hue + 
-                  particle['color_offset'] * self.hue_shift + 
-                  math.sin(base_t * 0.01) * 0.2) % 1.0
+        # Use palette instead of HSV calculation
+        palette_index = int(particle['color_offset'] * len(self.color_palette))
+        brightness = 0.8 + 0.2 * math.sin(t * 0.02 + particle['age'] * 0.1)
+        time_variation = t * 0.01
         
-        saturation = 0.7 + 0.3 * math.sin(base_t * 0.02 + particle['age'] * 0.1)
-        value = 0.8 + 0.2 * math.cos(base_t * 0.03)
-        
-        rgb = colorsys.hsv_to_rgb(hue_mod, saturation, value)
-        return tuple(int(c * 255) for c in rgb)
+        return self._get_palette_color(palette_index, brightness, time_variation)
     
     def _update_particle(self, particle, frame):
         t = frame + self.phase * 1000
@@ -254,8 +320,9 @@ class Chimerox:
                         trail_size = max(1, int(size * alpha))
                         cv2.circle(canvas, (trail_x, trail_y), trail_size, trail_color, -1)
         
-        # 5. Apply REALITY DISTORTION FIELD (The 5th Element)
-        canvas = self._apply_reality_distortion(canvas, frame)
+        # 5. Apply REALITY DISTORTION FIELD (The 5th Element) - if enabled
+        if self.reality_distortion_enabled:
+            canvas = self._apply_reality_distortion(canvas, frame)
         
         return canvas
     
@@ -280,12 +347,11 @@ class Chimerox:
             flicker_t = frame * 0.008 + bokeh['flicker_offset']
             flicker = 0.7 + 0.3 * math.sin(flicker_t) * math.cos(flicker_t * 1.7)
             
-            # Brighter, more saturated colors
-            saturation = 0.7 + 0.3 * math.sin(frame * 0.002 + bokeh['hue'] * 10)
-            value = brightness * flicker * bokeh['depth']
+            # Use palette colors
+            brightness = brightness * flicker * bokeh['depth']
+            time_variation = frame * 0.002
             
-            rgb = colorsys.hsv_to_rgb(bokeh['hue'], saturation, value)
-            color = tuple(int(c * 255) for c in rgb)
+            color = self._get_palette_color(bokeh['palette_index'], brightness, time_variation)
             
             # Draw larger, more prominent bokeh
             x, y = int(bokeh['x']), int(bokeh['y'])
@@ -329,14 +395,11 @@ class Chimerox:
                 points.append((x, y))
             
             # Draw wave with much more vibrant colors
-            hue = (self.base_hue + wave_idx * 0.15 + t * 0.02) % 1.0
+            palette_index = wave_idx % len(self.color_palette)
+            brightness = 0.8 + 0.2 * math.sin(t * 3 + wave_offset)
+            time_variation = t * 0.02
             
-            # Higher saturation and brightness
-            saturation = 0.8 + self.resonance * 0.2
-            value = 0.8 + 0.2 * math.sin(t * 3 + wave_offset)
-            
-            rgb = colorsys.hsv_to_rgb(hue, saturation, value)
-            wave_color = tuple(int(c * 255) for c in rgb)
+            wave_color = self._get_palette_color(palette_index, brightness, time_variation)
             
             # Draw thicker waves with stronger glow
             thickness = max(2, int(6 + self.entropy * 8))
@@ -381,13 +444,11 @@ class Chimerox:
                 y = center_y + math.sin(rotation) * radius
                 
                 if 0 <= x < self.width and 0 <= y < self.height:
-                    # Energy particle color
-                    energy_hue = (self.base_hue + rotation * 0.1) % 1.0
-                    energy_saturation = 0.8 + 0.2 * math.sin(t * 3 + spiral_idx)
-                    energy_value = vortex['strength'] * (1 - spiral_idx / spiral_points) * 0.8
+                    # Energy particle color from palette
+                    palette_index = (spiral_idx + int(t * 5)) % len(self.color_palette)
+                    brightness = vortex['strength'] * (1 - spiral_idx / spiral_points) * 0.8
                     
-                    rgb = colorsys.hsv_to_rgb(energy_hue, energy_saturation, energy_value)
-                    energy_color = tuple(int(c * 255) for c in rgb)
+                    energy_color = self._get_palette_color(palette_index, brightness, t * 0.1)
                     
                     # Draw energy particle
                     particle_size = max(1, int(3 * vortex['strength'] * (1 - spiral_idx / spiral_points)))
@@ -487,6 +548,9 @@ class Chimerox:
         return result
     
     def generate(self, output_path, metadata=None, codec=None):
+        import time
+        start_time = time.time()
+        
         # Auto-detect codec from extension or use provided
         if codec:
             fourcc_code = codec
@@ -517,7 +581,15 @@ class Chimerox:
             out.write(canvas)
         
         out.release()
+        
+        # Calculate and display elapsed time
+        end_time = time.time()
+        elapsed = end_time - start_time
+        minutes = int(elapsed // 60)
+        seconds = int(elapsed % 60)
+        
         print(f"Video saved to {output_path}")
+        print(f"Finished in {minutes:02d}:{seconds:02d}")
         
         # Add metadata if ffmpeg available
         if metadata:
@@ -659,6 +731,7 @@ Supported codecs:
                        help='Frames per second [1-200] (default: 24)')
     parser.add_argument('-c', '--codec', type=str, metavar='CODEC',
                        help='Force codec, overrides auto-detection')
+    parser.add_argument('--distort-reality', action='store_true', help='Enable reality distortion field (slower rendering)')
     parser.add_argument('-m', '--meta', action='append', default=[], metavar='KEY:VALUE',
                        help='Add metadata (can be used multiple times)')
     
@@ -770,7 +843,8 @@ Supported codecs:
         width=width,
         height=height,
         duration=args.length,
-        fps=args.fps
+        fps=args.fps,
+        distort_reality=args.distort_reality
     )
     
     output_path = Path(args.filename)
